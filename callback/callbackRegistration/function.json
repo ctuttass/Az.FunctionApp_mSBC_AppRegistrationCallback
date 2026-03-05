@@ -1,0 +1,28 @@
+{
+  "bindings": [
+    {
+      "authLevel": "function",
+      "type": "httpTrigger",
+      "direction": "in",
+      "route": "emea2",
+      "name": "Request",
+      "methods": [
+        "post",
+        "get"
+      ]
+    },
+    {
+      "type": "http",
+      "direction": "out",
+      "name": "Response"
+    },
+    {
+      "name": "outputDocument",
+      "databaseName": "emea2",
+      "containerName": "DefaultSRD",
+      "connection": "testing_cdr_DOCUMENTDB",
+      "direction": "out",
+      "type": "cosmosDB"
+    }
+  ]
+}
