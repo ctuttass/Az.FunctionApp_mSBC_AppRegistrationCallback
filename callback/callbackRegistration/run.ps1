@@ -8,6 +8,9 @@ $tenantId = $Request.Query.tenant
 $stateEncoded = $Request.Query.state
 $errorQuery = $Request.Query.error
 $errorDesc = $Request.Query.error_description
+
+# secrets lesen
+$geheim = $env:TestSecret
  
 # State dekodieren
 if ($stateEncoded) {
@@ -24,6 +27,7 @@ Write-Host "admin_consent : $adminConsent"
 Write-Host "tenant_id     : $tenantId"
 Write-Host "state (raw)   : $stateEncoded"
 Write-Host "state (decoded): $stateDecoded"
+Write-Host "geheim: $geheim"
  
 # Fehlerfall
 if ($errorQuery) {
