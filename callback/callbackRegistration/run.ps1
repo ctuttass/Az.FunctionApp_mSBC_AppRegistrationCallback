@@ -105,7 +105,7 @@ $splatForGraphToken = @{
     ClientSecret = $graphClientSecret
 }
 
-
+#what
 $token = Get-BearerTokenWithClientSecret @splatForGraphToken
 
 Write-Host "Token: $($token.Substring(0, 10))"
