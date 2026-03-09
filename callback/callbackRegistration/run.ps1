@@ -232,7 +232,9 @@ Start-Sleep -Seconds 5
 Invoke-RestMethod -Uri " https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/refresh" -Method  POST -Headers $ovhHeaders  
 
 start-sleep -Seconds 10
-Resolve-DnsName -Name "$($customerId).$($clusterId).spielwiese.ovh" -Type TXT -Server "8.8.8.8"
+#Resolve-DnsName -Name "$($customerId).$($clusterId).spielwiese.ovh" -Type TXT -Server "8.8.8.8"
+$fullFQDN = "$($customerId).$($clusterId).spielwiese.ovh"
+$response = Invoke-RestMethod -Uri "https://dns.google/resolve?name=$fullFQDN&type=TXT" -Method Get
 
 $uri = "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).spielwiese.ovh/verify"
 $response = Invoke-RestMethod -Uri $uri -Headers $graphHeaders -Method POST
