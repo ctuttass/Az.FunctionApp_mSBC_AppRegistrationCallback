@@ -104,7 +104,35 @@ Write-Host "state (decoded): $stateDecoded"
 Write-Host "customer       : $customerId"
 Write-Host "cluster        : $clusterId"
 
-
+# Rückmeldung an den Browser
+# Fehlerfall
+if ($errorQuery) {
+    Write-Host "FEHLER: $errorQuery — $errorDesc"
+    
+    Push-OutputBinding -Name Response -Value (
+        [HttpResponseContext]@{
+            StatusCode = [HttpStatusCode]::BadRequest
+            Body       = "Consent abgelehnt: $errorQuery`n$errorDesc"
+        }
+    )
+    return
+}
+ 
+# Erfolgsfall
+$responseBody = @"
+Consent erfolgreich!
+ 
+Kunde (state) : $stateDecoded
+Tenant-ID     : $tenantId
+admin_consent : $adminConsent
+"@
+ 
+Push-OutputBinding -Name Response -Value (
+    [HttpResponseContext]@{
+        StatusCode = [HttpStatusCode]::OK
+        Body       = $responseBody
+    }
+)
 
 $splatForGraphToken = @{
     AppId        = "466343fd-79a4-4ae0-8bc4-b92ee5e968ac"
@@ -118,12 +146,14 @@ $splatForGraphToken = @{
 $graphToken = Get-BearerTokenWithClientSecret @splatForGraphToken
 
 Write-Host "Token: $($graphToken.Substring(0, 10))"
-# get domains from graph api
-$uri = "https://graph.microsoft.com/v1.0/domains"
 $graphHeaders = @{
     "Content-Type"  = "application/json; charset=UTF-8"
     "Authorization" = "Bearer $($graphToken)"
 }
+
+# get domains from graph api
+$uri = "https://graph.microsoft.com/v1.0/domains"
+
 $response = Invoke-RestMethod -Uri $uri -Headers $graphHeaders -Method GET
 $response.value
 
@@ -136,9 +166,21 @@ $body = @{
 
 $response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains" -Headers $graphHeaders -Method POST -Body $body
 $response
-Start-Sleep -Seconds 10
+
 # get details of created domain
-$response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).spielwiese.ovh/verificationDnsRecords" -Headers $graphHeaders -Method GET
+$errorCount = 0
+do {
+    Start-Sleep -Seconds 10
+    try {
+        Write-Host "Trying to get verification DNS records... Attempt #$($errorCount + 1)"
+        $response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).spielwiese.ovh/verificationDnsRecords" -Headers $graphHeaders -Method GET -ErrorAction Stop
+    }
+    catch {
+        $errorCount ++
+    }
+} until ($response.recordType -match "TXT" -or $errorCount -ge 5)
+    <# Condition that stops the loop if it returns true #>
+
 $response.value | where-object { $_.recordType -eq "TXT" }
 $txtRecord = ($response.value | where-object { $_.recordType -eq "TXT" }).text
 
