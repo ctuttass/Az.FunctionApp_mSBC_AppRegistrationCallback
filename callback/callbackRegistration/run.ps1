@@ -61,8 +61,7 @@ function Get-BearerTokenWithClientSecret {
     try {
         $TokenResponse = Invoke-RestMethod @Splat_for_Request
         return $TokenResponse.access_token
-    }
-    catch {
+    } catch {
         Write-Error "Fehler beim Abrufen des Tokens: $_"
         return $null
     }
@@ -77,8 +76,13 @@ $errorQuery = $Request.Query.error
 $errorDesc = $Request.Query.error_description
 
 # secrets lesen
-$geheim = $env:TestSecret
 $graphClientSecret = $env:GraphClientSecret
+$ovhClientSecret = $env:ovhClientSecret
+
+<# custumerId und clusterId werden normalerweise im state mitgegeben, hier hartkodiert für Testzwecke
+$customerId = "julian005.tutti2"
+$state = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($customerId))
+#>
  
 # State dekodieren
 if ($stateEncoded) {
@@ -95,7 +99,8 @@ Write-Host "admin_consent : $adminConsent"
 Write-Host "tenant_id     : $tenantId"
 Write-Host "state (raw)   : $stateEncoded"
 Write-Host "state (decoded): $stateDecoded"
-Write-Host "geheim: $geheim"
+
+
 
 $splatForGraphToken = @{
     AppId        = "466343fd-79a4-4ae0-8bc4-b92ee5e968ac"
@@ -106,9 +111,86 @@ $splatForGraphToken = @{
 }
 
 #what
-$token = Get-BearerTokenWithClientSecret @splatForGraphToken
+$graphToken = Get-BearerTokenWithClientSecret @splatForGraphToken
 
-Write-Host "Token: $($token.Substring(0, 10))"
+Write-Host "Token: $($graphToken.Substring(0, 10))"
+# get domains from graph api
+$uri = "https://graph.microsoft.com/v1.0/domains"
+$graphHeaders = @{
+    "Content-Type"  = "application/json; charset=UTF-8"
+    "Authorization" = "Bearer $($graphToken)"
+}
+$response = Invoke-RestMethod -Uri $uri -Headers $graphHeaders -Method GET
+$response.value
+
+# create domain in test tenant
+$body = @{
+    id                = "$($customerId).$($clusterId).spielwiese.ovh"
+    isDefault         = $false
+    supportedServices = @()
+} | ConvertTo-Json
+
+$response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains" -Headers $graphHeaders -Method POST -Body $body
+$response
+ Start-Sleep -Seconds 10
+# get details of created domain
+$response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).spielwiese.ovh/verificationDnsRecords" -Headers $graphHeaders -Method GET
+$response.value | where-object { $_.recordType -eq "TXT" }
+$txtRecord = ($response.value | where-object { $_.recordType -eq "TXT" }).text
+
+# ovh token holen
+$body = @{
+    grant_type    = "client_credentials"
+    client_id     = "EU.87f208e9a0e6c9e8"
+    client_secret = $ovhClientSecret
+    scope         = "all"
+}
+
+$splatForOvhToken = @{
+    Uri         = "https://www.ovh.com/auth/oauth2/token"
+    Body        = $body
+    Method      = "POST"
+    ContentType = "application/x-www-form-urlencoded"
+}
+
+$ovhToken = Invoke-RestMethod @splatForOvhToken
+
+Write-Host "OVH Token: $($ovhToken.access_token.Substring(0, 10))"
+
+$ovhHeaders = @{
+    Authorization  = "Bearer $($ovhToken.access_token)"
+    'Content-Type' = 'application/json'
+}
+
+$uri = "https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/record?subDomain=$($customerId).$($clusterId)"  
+$response = Invoke-RestMethod -Uri $uri -Headers $ovhHeaders -Method GET
+$response
+
+#$uri = "https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/record/5403044774"
+#$response = Invoke-RestMethod -Uri $uri -Headers $ovhHeaders -Method GET
+#$response
+
+# txt record anlegen
+$body = @{
+    subDomain = "$($customerId).$($clusterId)"
+    fieldType = "TXT"
+    target    = $txtRecord
+
+} | ConvertTo-Json
+
+$uri = "https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/record"
+ 
+$record = Invoke-RestMethod -Uri $uri -Method POST -Headers $ovhHeaders -Body $body  
+Start-Sleep -Seconds 5
+#zone refreshen
+Invoke-RestMethod -Uri " https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/refresh" -Method  POST -Headers $ovhHeaders  
+
+start-sleep -Seconds 10
+Resolve-DnsName -Name "$($customerId).$($clusterId).spielwiese.ovh" -Type TXT -Server "8.8.8.8"
+
+$uri = "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).spielwiese.ovh/verify"
+$response = Invoke-RestMethod -Uri $uri -Headers $graphHeaders -Method POST
+
 
 # Fehlerfall
 if ($errorQuery) {
