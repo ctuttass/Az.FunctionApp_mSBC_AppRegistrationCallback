@@ -89,16 +89,20 @@ if ($stateEncoded) {
     $stateDecoded = [System.Text.Encoding]::UTF8.GetString(
         [Convert]::FromBase64String($stateEncoded)
     )
+    $customerId = $stateDecoded.Split(".")[0]
+    $clusterId = $stateDecoded.Split(".")[1]
 } else {
     $stateDecoded = $null
 }
  
 # Logging
 Write-Host "Consent Callback empfangen"
-Write-Host "admin_consent : $adminConsent"
-Write-Host "tenant_id     : $tenantId"
-Write-Host "state (raw)   : $stateEncoded"
+Write-Host "admin_consent  : $adminConsent"
+Write-Host "tenant_id      : $tenantId"
+Write-Host "state (raw)    : $stateEncoded"
 Write-Host "state (decoded): $stateDecoded"
+Write-Host "customer       : $customerId"
+Write-Host "cluster        : $clusterId"
 
 
 
@@ -132,7 +136,7 @@ $body = @{
 
 $response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains" -Headers $graphHeaders -Method POST -Body $body
 $response
- Start-Sleep -Seconds 10
+Start-Sleep -Seconds 10
 # get details of created domain
 $response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).spielwiese.ovh/verificationDnsRecords" -Headers $graphHeaders -Method GET
 $response.value | where-object { $_.recordType -eq "TXT" }
