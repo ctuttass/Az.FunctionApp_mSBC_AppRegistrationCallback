@@ -178,7 +178,7 @@ do {
     catch {
         $errorCount ++
     }
-} until ($response.recordType -match "TXT" -or $errorCount -ge 5)
+} until ($response.value.recordType -match "TXT" -or $errorCount -ge 5)
     <# Condition that stops the loop if it returns true #>
 
 $response.value | where-object { $_.recordType -eq "TXT" }
@@ -238,31 +238,3 @@ $uri = "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).sp
 $response = Invoke-RestMethod -Uri $uri -Headers $graphHeaders -Method POST
 
 
-# Fehlerfall
-if ($errorQuery) {
-    Write-Host "FEHLER: $errorQuery — $errorDesc"
-    
-    Push-OutputBinding -Name Response -Value (
-        [HttpResponseContext]@{
-            StatusCode = [HttpStatusCode]::BadRequest
-            Body       = "Consent abgelehnt: $errorQuery`n$errorDesc"
-        }
-    )
-    return
-}
- 
-# Erfolgsfall
-$responseBody = @"
-Consent erfolgreich!
- 
-Kunde (state) : $stateDecoded
-Tenant-ID     : $tenantId
-admin_consent : $adminConsent
-"@
- 
-Push-OutputBinding -Name Response -Value (
-    [HttpResponseContext]@{
-        StatusCode = [HttpStatusCode]::OK
-        Body       = $responseBody
-    }
-)
