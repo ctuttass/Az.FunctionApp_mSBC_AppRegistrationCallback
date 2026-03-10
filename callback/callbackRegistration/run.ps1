@@ -68,6 +68,7 @@ function Get-BearerTokenWithClientSecret {
 
 }
 
+Write-Host "Consent Callback empfangen"
 # Query Parameter auslesen
 $adminConsent = $Request.Query.admin_consent
 $tenantId = $Request.Query.tenant
@@ -96,7 +97,7 @@ if ($stateEncoded) {
 }
  
 # Logging
-Write-Host "Consent Callback empfangen"
+
 Write-Host "admin_consent  : $adminConsent"
 Write-Host "tenant_id      : $tenantId"
 Write-Host "state (raw)    : $stateEncoded"
