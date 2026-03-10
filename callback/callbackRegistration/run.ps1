@@ -171,7 +171,7 @@ $body = @{
 
 $response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains" -Headers $graphHeaders -Method POST -Body $body
 Write-Host "created domain in tenant"
-$response | Select-Object id, isVerified
+$response
 
 # get details of created domain
 $errorCount = 0
@@ -187,7 +187,7 @@ do {
 } until ($response.value.recordType -match "TXT" -or $errorCount -ge 5)
     <# Condition that stops the loop if it returns true #>
 Write-Host "Received verification DNS records:"
-$response.value | where-object { $_.recordType -eq "TXT" } | Select-Object label, recordType, text
+$response.value | where-object { $_.recordType -eq "TXT" }
 $txtRecord = ($response.value | where-object { $_.recordType -eq "TXT" }).text
 
 # ovh token holen
@@ -235,7 +235,7 @@ $uri = "https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/record"
  
 $record = Invoke-RestMethod -Uri $uri -Method POST -Headers $ovhHeaders -Body $body 
 Write-Host "created TXT record in OVH:"
-$record | Select-Object subDomain, zone, fieldType, target 
+$record
 Start-Sleep -Seconds 5
 #zone refreshen
 Invoke-RestMethod -Uri " https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/refresh" -Method  POST -Headers $ovhHeaders  
@@ -245,7 +245,7 @@ start-sleep -Seconds 10
 $fullFQDN = "$($customerId).$($clusterId).spielwiese.ovh"
 $response = Invoke-RestMethod -Uri "https://dns.google/resolve?name=$fullFQDN&type=TXT" -Method Get
 Write-Host "DNS record resolved via Google DNS:"
-$response.Answer
+$response
 
 $uri = "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).spielwiese.ovh/verify"
 $response = Invoke-RestMethod -Uri $uri -Headers $graphHeaders -Method POST
