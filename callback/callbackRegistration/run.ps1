@@ -145,7 +145,10 @@ $splatForGraphToken = @{
 #what
 $graphToken = Get-BearerTokenWithClientSecret @splatForGraphToken
 
-Write-Host "Token: $($graphToken.Substring(0, 10))"
+if ($graphToken -like "eyJ*") {
+    Write-Host "recieved Graph Token: $($graphToken.Substring(0, 10))"
+}
+
 $graphHeaders = @{
     "Content-Type"  = "application/json; charset=UTF-8"
     "Authorization" = "Bearer $($graphToken)"
@@ -155,7 +158,8 @@ $graphHeaders = @{
 $uri = "https://graph.microsoft.com/v1.0/domains"
 
 $response = Invoke-RestMethod -Uri $uri -Headers $graphHeaders -Method GET
-$response.value
+Write-Host "recieved Domains from Tenant:"
+$response.value.id
 
 # create domain in test tenant
 $body = @{
@@ -165,7 +169,8 @@ $body = @{
 } | ConvertTo-Json
 
 $response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains" -Headers $graphHeaders -Method POST -Body $body
-$response
+Write-Host "created domain in tenant"
+$response | Select-Object id, isVerified
 
 # get details of created domain
 $errorCount = 0
@@ -180,8 +185,8 @@ do {
     }
 } until ($response.value.recordType -match "TXT" -or $errorCount -ge 5)
     <# Condition that stops the loop if it returns true #>
-
-$response.value | where-object { $_.recordType -eq "TXT" }
+Write-Host "Received verification DNS records:"
+$response.value | where-object { $_.recordType -eq "TXT" } | Select-Object label, recordType, text
 $txtRecord = ($response.value | where-object { $_.recordType -eq "TXT" }).text
 
 # ovh token holen
@@ -201,7 +206,7 @@ $splatForOvhToken = @{
 
 $ovhToken = Invoke-RestMethod @splatForOvhToken
 
-Write-Host "OVH Token: $($ovhToken.access_token.Substring(0, 10))"
+Write-Host "recieved OVH Token: $($ovhToken.access_token.Substring(0, 10))"
 
 $ovhHeaders = @{
     Authorization  = "Bearer $($ovhToken.access_token)"
@@ -210,6 +215,7 @@ $ovhHeaders = @{
 
 $uri = "https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/record?subDomain=$($customerId).$($clusterId)"  
 $response = Invoke-RestMethod -Uri $uri -Headers $ovhHeaders -Method GET
+Write-Host "checking if record already exists in OVH:"
 $response
 
 #$uri = "https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/record/5403044774"
@@ -226,7 +232,9 @@ $body = @{
 
 $uri = "https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/record"
  
-$record = Invoke-RestMethod -Uri $uri -Method POST -Headers $ovhHeaders -Body $body  
+$record = Invoke-RestMethod -Uri $uri -Method POST -Headers $ovhHeaders -Body $body 
+Write-Host "created TXT record in OVH:"
+$record | Select-Object subDomain, zone, fieldType, target 
 Start-Sleep -Seconds 5
 #zone refreshen
 Invoke-RestMethod -Uri " https://eu.api.ovh.com/v1/domain/zone/spielwiese.ovh/refresh" -Method  POST -Headers $ovhHeaders  
@@ -235,8 +243,18 @@ start-sleep -Seconds 10
 #Resolve-DnsName -Name "$($customerId).$($clusterId).spielwiese.ovh" -Type TXT -Server "8.8.8.8"
 $fullFQDN = "$($customerId).$($clusterId).spielwiese.ovh"
 $response = Invoke-RestMethod -Uri "https://dns.google/resolve?name=$fullFQDN&type=TXT" -Method Get
+Write-Host "DNS record resolved via Google DNS:"
+$response.Answer
 
 $uri = "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).spielwiese.ovh/verify"
 $response = Invoke-RestMethod -Uri $uri -Headers $graphHeaders -Method POST
+Write-Host "Domain verification triggered in Microsoft Graph. Checking status:"
+$count = 0
+do {
+    Start-Sleep -Seconds 5
+    $response = Invoke-RestMethod -Uri "https://graph.microsoft.com/v1.0/domains/$($customerId).$($clusterId).spielwiese.ovh" -Headers $graphHeaders -Method GET
+    Write-Host "Domain verification status: $($response.isVerified)"
+    $count++
+} until ($response.isVerified -eq $true -or $count -ge 10)
 
 
